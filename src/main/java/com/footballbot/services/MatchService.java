@@ -25,12 +25,16 @@ public class MatchService {
         this.playerRepository = playerRepository;
     }
 
+    public Optional<MatchEntity> findMatchByDate (LocalDate date) {
+        return matchRepository.findByDate(date);
+    }
+
     public MatchEntity createMatchIfNotExists(LocalDate date) {
         Optional<MatchEntity> existingMatch = matchRepository.findByDate(date);
 
         if(existingMatch.isPresent()) {
             log.warn("Match for date {} already exists, returning existing match.", date);
-            return existingMatch.get();
+            return null;
         }
 
         MatchEntity match = new MatchEntity();
