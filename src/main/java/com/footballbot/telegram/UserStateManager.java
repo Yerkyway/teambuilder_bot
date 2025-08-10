@@ -25,6 +25,7 @@ public class UserStateManager {
     public enum UserState {
         WAITING_FOR_MATCH_DATE,
         WAITING_FOR_PLAYERS_LIST_DATE,
-        WAITING_FOR_JOIN_MATCH_DATE
+        WAITING_FOR_JOIN_MATCH_DATE,
+        WAITING_FOR_QUIT_MATCH_DATE
     }
 }

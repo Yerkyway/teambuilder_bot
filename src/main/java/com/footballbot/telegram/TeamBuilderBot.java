@@ -69,7 +69,8 @@ public class TeamBuilderBot extends TelegramLongPollingBot {
                         "/create_match - создать матч(только админ может создать матч)\n" +
                         "/join - присоединиться к матчу\n" +
                         "/match_list - список матчей\n" +
-                        "/players_list - список игроков на ближайший матч");
+                        "/players_list - список игроков на ближайший матч\n" +
+                        "/quit - отказаться от участия в матче\n");
             }
             case "/create_match" -> {
                 LocalDate matchDate = LocalDate.now();
@@ -99,6 +100,19 @@ public class TeamBuilderBot extends TelegramLongPollingBot {
             case "/players_list" -> {
                 UserStateManager.setUserState(telegramId, UserStateManager.UserState.WAITING_FOR_PLAYERS_LIST_DATE);
                 sendText(chatId, "Введите дату матча в формате dd-MM-yyyy для получения списка игроков:");
+            } case "/quit" -> {
+                List<MatchEntity> userMatches = matchService.getMatchesForPlayer(telegramId);
+                if (userMatches.isEmpty()) {
+                    sendText(chatId, "❌ Вы не записаны ни на один матч.");
+                } else {
+                    StringBuilder response = new StringBuilder("Вы записаны на следующие матчи:\n");
+                    for (MatchEntity match : userMatches) {
+                        response.append("Матч на ").append(match.getDate()).append("\n");
+                    }
+                    response.append("Введите дату матча в формате dd-MM-yyyy, от которого вы хотите отказаться:");
+                    UserStateManager.setUserState(telegramId, UserStateManager.UserState.WAITING_FOR_QUIT_MATCH_DATE);
+                    sendText(chatId, response.toString());
+                }
             }
         }
     }
@@ -112,6 +126,29 @@ public class TeamBuilderBot extends TelegramLongPollingBot {
             handlePlayerListInput(telegramId, chatId, messageText);
         } else if (userState == UserStateManager.UserState.WAITING_FOR_JOIN_MATCH_DATE) {
             handleJoinMatchDateInput(telegramId, chatId, messageText, username);
+        } else if (userState == UserStateManager.UserState.WAITING_FOR_QUIT_MATCH_DATE) {
+            handleQuitMatchDateInput(telegramId, chatId, messageText);
+        }
+    }
+
+    private void handleQuitMatchDateInput(Long telegramId, Long chatId, String messageText) {
+        try {
+            LocalDate matchDate = LocalDate.parse(messageText, DATE_FORMATTER);
+            try {
+                matchService.removePlayerFromMatch(telegramId, matchDate);
+                sendText(chatId, "✅ Вы успешно отказались от участия в матче на " + matchDate + ".");
+            } catch (IllegalArgumentException e) {
+                sendText(chatId, "❌ " + e.getMessage());
+            } catch (Exception e) {
+                sendText(chatId, "❌ Произошла ошибка при отказе от матча: " + e.getMessage());
+            }
+            UserStateManager.removeUserState(telegramId);
+        } catch (DateTimeParseException e) {
+            sendText(chatId, "❌ Неверный формат даты. Пожалуйста, используйте формат dd-MM-yyyy.");
+        } catch (Exception e) {
+            sendText(chatId, "❌ Произошла ошибка при обработке запроса: " + e.getMessage());
+        } finally {
+            UserStateManager.removeUserState(telegramId);
         }
     }
 

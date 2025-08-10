@@ -79,4 +79,35 @@ public class MatchService {
                         .toList())
                 .orElse(List.of());
     }
+
+    @Transactional(readOnly = true)
+    public List<MatchEntity> getMatchesForPlayer(Long telegramId) {
+        return matchRepository.findAll().stream()
+                .filter(match -> match.getPlayers().stream()
+                        .anyMatch(player -> player.getTelegramId().equals(telegramId)))
+                .toList();
+    }
+
+    @Transactional
+    public void removePlayerFromMatch(Long telegramId, LocalDate matchDate) {
+        Optional<MatchEntity> matchOpt = matchRepository.findByDate(matchDate);
+
+        if (!matchOpt.isPresent()) {
+            throw new IllegalArgumentException("Матч на эту дату не найден: " + matchDate);
+        }
+
+        MatchEntity match = matchOpt.get();
+        Optional<PlayerEntity> playerToRemove = match.getPlayers().stream()
+                .filter(player -> player.getTelegramId().equals(telegramId))
+                .findFirst();
+
+        if (!playerToRemove.isPresent()) {
+            throw new IllegalArgumentException("Вы не записаны на матч в эту дату: " + matchDate);
+        }
+
+        PlayerEntity player = playerToRemove.get();
+        match.getPlayers().remove(player);
+        playerRepository.delete(player);
+        matchRepository.save(match);
+    }
 }
