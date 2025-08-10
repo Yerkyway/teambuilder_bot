@@ -58,7 +58,7 @@ public class TeamBuilderBot extends TelegramLongPollingBot {
         Long telegramId = update.getMessage().getFrom().getId();
 
         if (UserStateManager.hasUserState(telegramId)) {
-            handleUserState(telegramId, messageText, chatId);
+            handleUserState(telegramId, messageText, chatId, username);
             return;
         }
 
@@ -81,16 +81,8 @@ public class TeamBuilderBot extends TelegramLongPollingBot {
                 sendText(chatId, "Введите дату матча в формате dd-MM-yyyy:");
             }
             case "/join" -> {
-                LocalDate matchDate = LocalDate.now();
-                try {
-                    matchService.addPlayer(telegramId, username, matchDate);
-                    sendText(chatId, "✅ Вы успешно присоединились к матчу на " + matchDate + ".");
-                } catch (IllegalArgumentException e) {
-                    // Обработка исключения IllegalArgumentException
-                    sendText(chatId, "⚠️ " + e.getMessage());  // Показываем причину ошибки
-                } catch (Exception e) {
-                    sendText(chatId, "❌ Произошла ошибка при попытке присоединиться к матчу.");
-                }
+                UserStateManager.setUserState(telegramId, UserStateManager.UserState.WAITING_FOR_JOIN_MATCH_DATE);
+                sendText(chatId, "Введите дату матча в формате dd-MM-yyyy, к которому вы хотите присоединиться:");
             }
             case "/match_list" -> {
                 List<MatchEntity> matches = matchService.getAllMatches();
@@ -111,15 +103,43 @@ public class TeamBuilderBot extends TelegramLongPollingBot {
         }
     }
 
-    private void handleUserState(Long telegramId, String messageText, Long chatId) {
+    private void handleUserState(Long telegramId, String messageText, Long chatId, String username) {
         UserStateManager.UserState userState = UserStateManager.getUserState(telegramId);
 
         if (userState == UserStateManager.UserState.WAITING_FOR_MATCH_DATE) {
             handleMatchDateInput(telegramId, chatId, messageText);
         } else if (userState == UserStateManager.UserState.WAITING_FOR_PLAYERS_LIST_DATE) {
             handlePlayerListInput(telegramId, chatId, messageText);
+        } else if (userState == UserStateManager.UserState.WAITING_FOR_JOIN_MATCH_DATE) {
+            handleJoinMatchDateInput(telegramId, chatId, messageText, username);
         }
     }
+
+    private void handleJoinMatchDateInput(Long telegramId, Long chatId, String messageText, String username) {
+        try {
+            LocalDate matchDate = LocalDate.parse(messageText, DATE_FORMATTER);
+            Optional<MatchEntity> existingMatch = matchService.findMatchByDate(matchDate);
+
+            if (!existingMatch.isPresent()) {
+                sendText(chatId, "❌ Матч на эту дату не найден. Пожалуйста, проверьте дату и попробуйте снова.");
+            } else {
+                try {
+                    matchService.addPlayer(telegramId, username, matchDate);
+                    sendText(chatId, "✅ Вы успешно присоединились к матчу на " + matchDate + ".");
+                } catch (IllegalArgumentException e) {
+                    sendText(chatId, "❌ " + e.getMessage());
+                } catch (Exception e) {
+                    sendText(chatId, "❌ Произошла ошибка при присоединении к матчу: " + e.getMessage());
+                }
+            }
+            UserStateManager.removeUserState(telegramId);
+        } catch (DateTimeParseException e) {
+            sendText(chatId, "❌ Неверный формат даты. Пожалуйста, используйте формат dd-MM-yyyy.");
+        } catch (Exception e) {
+            sendText(chatId, "❌ Произошла ошибка при обработке запроса: " + e.getMessage());
+        }
+    }
+
 
     private void handleMatchDateInput(Long telegramId, Long chatId, String messageText) {
         try {
@@ -147,17 +167,27 @@ public class TeamBuilderBot extends TelegramLongPollingBot {
         try {
             LocalDate matchDate = LocalDate.parse(messageText, DATE_FORMATTER);
             List<String> players = matchService.playersList(matchDate);
+            Optional<MatchEntity> existingMatch = matchService.findMatchByDate(matchDate);
 
-            if (players.isEmpty()) {
-                sendText(chatId, "Нет игроков на матч в эту дату.");
+            if (!existingMatch.isPresent()) {
+                sendText(chatId, "❌ Матч на эту дату не найден.");
+                return;
             } else {
-                StringBuilder response = new StringBuilder("Список игроков на матч"+ matchDate +":\n");
-                for (String player : players) {
-                    response.append(player).append("\n");
+                try {
+                    if (players.isEmpty()) {
+                        sendText(chatId, "Нет игроков на матч в эту дату.");
+                    } else {
+                        StringBuilder response = new StringBuilder("Список игроков на матч"+ matchDate +":\n");
+                        for (String player : players) {
+                            response.append(player).append("\n");
+                        }
+                        sendText(chatId, response.toString());
+                    }
+                    UserStateManager.removeUserState(telegramId);
+                } catch (Exception e) {
+                    sendText(chatId, "❌ Произошла ошибка при получении списка игроков: " + e.getMessage());
                 }
-                sendText(chatId, response.toString());
             }
-            UserStateManager.removeUserState(telegramId);
         } catch (DateTimeParseException e) {
             sendText(chatId, "❌ Неверный формат даты. Пожалуйста, используйте формат dd-MM-yyyy.");
         } catch (Exception e) {

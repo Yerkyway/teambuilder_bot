@@ -48,7 +48,13 @@ public class MatchService {
 
     @Transactional
     public void addPlayer(Long telegramId, String playerName, LocalDate matchDate) {
-        MatchEntity match = createMatchIfNotExists(matchDate);
+        Optional<MatchEntity> matchOpt = matchRepository.findByDate(matchDate);
+
+        if (!matchOpt.isPresent()) {
+            throw new IllegalArgumentException("Матч на эту дату не найден: " + matchDate);
+        }
+
+        MatchEntity match = matchOpt.get();
 
         boolean alreadyInMatch = match.getPlayers().stream()
                 .anyMatch(p -> p.getTelegramId().equals(telegramId));
