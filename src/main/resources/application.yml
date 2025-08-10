@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: "teambuilder_bot"
+
+  datasource:
+    url: jdbc:postgresql://localhost:5433/football_db
+    username: football_user
+    password: football_password
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+
+telegrambots:
+  enabled: true
+  bots:
+    - botUsername: "MatchLineupBot"
+      botToken: "8145502018:AAFLAFNpCYonE5xSNM5zQnW2ND4m-HYGE98"
+
